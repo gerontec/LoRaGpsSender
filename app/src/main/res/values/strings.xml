@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">LoRa GPS Sender</string>
+    <string name="status">Status:</string>
+    <string name="connected">Connected to ttyUSB0</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="sending">Sending GPS data via LoRa</string>
+    <string name="config_selection">LoRa Configuration:</string>
+    <string name="send_config">Send</string>
+    <string name="config_sent">Config sent: %1$s</string>
+    <string name="config_error">Error: Not connected</string>
+
+    <string-array name="config_options">
+        <item>netid00</item>
+        <item>netid10</item>
+    </string-array>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CH340/CH341 USB to Serial Converter -->
+    <!-- Vendor ID: 0x1a86, Product ID: 0x7523 -->
+    <usb-device vendor-id="6790" product-id="29987" />
+</resources>
