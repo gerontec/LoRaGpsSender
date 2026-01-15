@@ -9,6 +9,10 @@
     <string name="send_config">Send</string>
     <string name="config_sent">Config sent: %1$s</string>
     <string name="config_error">Error: Not connected</string>
+    <string name="message_label">Kurznachricht:</string>
+    <string name="message_hint">Nachricht eingeben...</string>
+    <string name="send_message">Senden</string>
+    <string name="emergency_gps">NOTFALL GPS</string>
 
     <string-array name="config_options">
         <item>netid00</item>
