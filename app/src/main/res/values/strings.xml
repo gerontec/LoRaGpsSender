@@ -12,5 +12,6 @@
 
     <string-array name="config_options">
         <item>netid00</item>
+        <item>netid10</item>
     </string-array>
 </resources>

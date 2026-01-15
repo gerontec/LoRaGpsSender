@@ -44,6 +44,10 @@ class MainActivity : AppCompatActivity() {
         "netid00" to byteArrayOf(
             0xFF.toByte(), 0xFF.toByte(), 0x00.toByte(), 0x62.toByte(),
             0xE0.toByte(), 0x18.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
+        ),
+        "netid10" to byteArrayOf(
+            0xFF.toByte(), 0x0A.toByte(), 0x0A.toByte(), 0xE0.toByte(),
+            0xC0.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
         )
     )
 
