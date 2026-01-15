@@ -1,0 +1,29 @@
+R_DEF: Internal format may change without notice
+local
+array config_options
+id configLabel
+id configSpinner
+id deviceInfo
+id emergencyButton
+id logText
+id messageInput
+id messageLabel
+id sendConfigButton
+id sendMessageButton
+id statusLabel
+id statusText
+layout activity_main
+string app_name
+string config_error
+string config_selection
+string config_sent
+string connected
+string disconnected
+string emergency_gps
+string message_hint
+string message_label
+string send_config
+string send_message
+string sending
+string status
+xml device_filter
