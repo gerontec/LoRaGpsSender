@@ -1,18 +1,27 @@
 package com.gerontec.loragpssender
 
+import android.Manifest
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.hoho.android.usbserial.driver.Ch34xSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -28,12 +37,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var logText: TextView
     private lateinit var configSpinner: Spinner
     private lateinit var sendConfigButton: Button
+    private lateinit var messageInput: EditText
+    private lateinit var sendMessageButton: Button
+    private lateinit var emergencyButton: Button
 
     private var usbManager: UsbManager? = null
     private var serialPort: UsbSerialPort? = null
     private var usbDevice: UsbDevice? = null
+    private var locationManager: LocationManager? = null
+    private var lastKnownLocation: Location? = null
 
     private val ACTION_USB_PERMISSION = "com.gerontec.loragpssender.USB_PERMISSION"
+    private val LOCATION_PERMISSION_REQUEST_CODE = 1001
 
     // CH341 Vendor and Product IDs
     private val CH341_VENDOR_ID = 0x1a86
@@ -95,6 +110,9 @@ class MainActivity : AppCompatActivity() {
         logText = findViewById(R.id.logText)
         configSpinner = findViewById(R.id.configSpinner)
         sendConfigButton = findViewById(R.id.sendConfigButton)
+        messageInput = findViewById(R.id.messageInput)
+        sendMessageButton = findViewById(R.id.sendMessageButton)
+        emergencyButton = findViewById(R.id.emergencyButton)
 
         // Setup config spinner
         val configOptions = resources.getStringArray(R.array.config_options)
@@ -102,12 +120,26 @@ class MainActivity : AppCompatActivity() {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         configSpinner.adapter = adapter
 
-        // Setup send button
+        // Setup send config button
         sendConfigButton.setOnClickListener {
             sendSelectedConfig()
         }
 
+        // Setup send message button
+        sendMessageButton.setOnClickListener {
+            sendMessage()
+        }
+
+        // Setup emergency GPS button
+        emergencyButton.setOnClickListener {
+            sendEmergencyGPS()
+        }
+
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        // Request location permissions
+        requestLocationPermissions()
 
         // Register USB receivers
         val filter = IntentFilter().apply {
@@ -321,6 +353,204 @@ class MainActivity : AppCompatActivity() {
             }
         } ?: run {
             log("ERROR: Unknown configuration '$selectedConfig'")
+        }
+    }
+
+    private fun sendMessage() {
+        val message = messageInput.text.toString().trim()
+
+        if (message.isEmpty()) {
+            Toast.makeText(this, "Bitte Nachricht eingeben", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (serialPort?.isOpen != true) {
+            log("ERROR: Cannot send message - not connected to ttyUSB0")
+            Toast.makeText(this, "Nicht verbunden!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            // Send message as ASCII bytes
+            val messageBytes = message.toByteArray(Charsets.US_ASCII)
+            serialPort?.write(messageBytes, 1000)
+
+            val hexString = messageBytes.joinToString(" ") { byte ->
+                String.format("%02X", byte)
+            }
+
+            log("TX: Message sent successfully")
+            log("Message: $message")
+            log("Bytes: $hexString (${messageBytes.size} bytes)")
+
+            // Clear input field
+            messageInput.setText("")
+            Toast.makeText(this, "Nachricht gesendet", Toast.LENGTH_SHORT).show()
+
+        } catch (e: IOException) {
+            log("ERROR: Failed to send message: ${e.message}")
+            Toast.makeText(this, "Fehler beim Senden!", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            log("ERROR: Unexpected error sending message: ${e.message}")
+            Toast.makeText(this, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun sendEmergencyGPS() {
+        if (serialPort?.isOpen != true) {
+            log("ERROR: Cannot send GPS - not connected to ttyUSB0")
+            Toast.makeText(this, "Nicht verbunden!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        // Check location permission
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            log("ERROR: Location permission not granted")
+            Toast.makeText(this, "GPS-Berechtigung fehlt!", Toast.LENGTH_SHORT).show()
+            requestLocationPermissions()
+            return
+        }
+
+        try {
+            // Get last known location
+            val location = locationManager?.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: locationManager?.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                ?: lastKnownLocation
+
+            if (location == null) {
+                log("ERROR: No GPS location available")
+                Toast.makeText(this, "Keine GPS-Position verfügbar!", Toast.LENGTH_LONG).show()
+                return
+            }
+
+            // Format GPS data as string: "EMERGENCY LAT:xx.xxxxx LON:yy.yyyyy"
+            val gpsMessage = String.format(
+                "EMERGENCY LAT:%.6f LON:%.6f",
+                location.latitude,
+                location.longitude
+            )
+
+            // Send GPS message as ASCII bytes
+            val gpsBytes = gpsMessage.toByteArray(Charsets.US_ASCII)
+            serialPort?.write(gpsBytes, 1000)
+
+            val hexString = gpsBytes.joinToString(" ") { byte ->
+                String.format("%02X", byte)
+            }
+
+            log("TX: EMERGENCY GPS sent successfully")
+            log("GPS: $gpsMessage")
+            log("Bytes: $hexString (${gpsBytes.size} bytes)")
+
+            Toast.makeText(this, "NOTFALL GPS gesendet!", Toast.LENGTH_LONG).show()
+
+        } catch (e: SecurityException) {
+            log("ERROR: Location permission denied: ${e.message}")
+            Toast.makeText(this, "GPS-Berechtigung fehlt!", Toast.LENGTH_SHORT).show()
+        } catch (e: IOException) {
+            log("ERROR: Failed to send GPS: ${e.message}")
+            Toast.makeText(this, "Fehler beim Senden!", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            log("ERROR: Unexpected error sending GPS: ${e.message}")
+            Toast.makeText(this, "Fehler: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun requestLocationPermissions() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ),
+                LOCATION_PERMISSION_REQUEST_CODE
+            )
+        } else {
+            // Permission already granted, start location updates
+            startLocationUpdates()
+        }
+    }
+
+    private fun startLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+
+        try {
+            // Request location updates
+            locationManager?.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                5000, // 5 seconds
+                10f,  // 10 meters
+                object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        lastKnownLocation = location
+                        log("GPS: Location updated (${location.latitude}, ${location.longitude})")
+                    }
+
+                    override fun onProviderEnabled(provider: String) {
+                        log("GPS: Provider enabled: $provider")
+                    }
+
+                    override fun onProviderDisabled(provider: String) {
+                        log("GPS: Provider disabled: $provider")
+                    }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {
+                        // Deprecated but required for older API levels
+                    }
+                }
+            )
+
+            // Also try network provider
+            locationManager?.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                5000,
+                10f,
+                object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        if (lastKnownLocation == null) {
+                            lastKnownLocation = location
+                            log("Network: Location updated (${location.latitude}, ${location.longitude})")
+                        }
+                    }
+
+                    override fun onProviderEnabled(provider: String) {}
+                    override fun onProviderDisabled(provider: String) {}
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                }
+            )
+
+            log("GPS: Location updates started")
+        } catch (e: SecurityException) {
+            log("ERROR: Location permission error: ${e.message}")
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            LOCATION_PERMISSION_REQUEST_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    log("GPS: Location permission granted")
+                    startLocationUpdates()
+                } else {
+                    log("GPS: Location permission denied")
+                    Toast.makeText(this, "GPS-Berechtigung benötigt für Notfall-Funktion", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 }
