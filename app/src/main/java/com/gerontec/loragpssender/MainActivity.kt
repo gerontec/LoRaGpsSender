@@ -304,19 +304,15 @@ class MainActivity : AppCompatActivity() {
         loraConfigs[selectedConfig]?.let { configBytes ->
             try {
                 // Send the configuration bytes
-                val bytesWritten = serialPort?.write(configBytes, 1000)
+                serialPort?.write(configBytes, 1000)
 
                 // Log the sent bytes in hex format
                 val hexString = configBytes.joinToString(" ") { byte ->
                     String.format("%02X", byte)
                 }
 
-                if (bytesWritten != null && bytesWritten > 0) {
-                    log("TX: Config '$selectedConfig' sent successfully")
-                    log("Bytes sent: $hexString (${configBytes.size} bytes)")
-                } else {
-                    log("ERROR: Failed to send config '$selectedConfig'")
-                }
+                log("TX: Config '$selectedConfig' sent successfully")
+                log("Bytes sent: $hexString (${configBytes.size} bytes)")
 
             } catch (e: IOException) {
                 log("ERROR: Failed to send config: ${e.message}")
