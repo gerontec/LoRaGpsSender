@@ -1,21 +1,39 @@
 # LoRa GPS Sender - Installationsanleitung
 
+## 📱 Schnellinstallation per QR-Code
+
+**EINFACHSTE METHODE - Mit Handy-Kamera scannen:**
+
+![QR-Code Download](https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=https://heissa.de/web1/app-debug.pkg)
+
+**Oder Link direkt aufrufen:**
+🔗 **https://heissa.de/web1/app-debug.pkg**
+
+### So geht's:
+1. **QR-Code mit Handy-Kamera scannen** (oder Link öffnen)
+2. **APK herunterladen**
+3. **Installation erlauben** (beim ersten Mal)
+4. **"Installieren" tippen**
+5. **Fertig!** 🎉
+
+---
+
 ## Einfache Installation auf Android
 
 ### Schritt 1: APK auf das Handy übertragen
 
-**Option A - Per USB-Kabel:**
+**Option A - Per QR-Code (EMPFOHLEN):**
+1. QR-Code oben mit Handy-Kamera scannen
+2. Link öffnen und APK herunterladen
+3. Direkt zur Installation (siehe Schritt 2)
+
+**Option B - Per USB-Kabel:**
 1. Handy per USB an PC anschließen
 2. Datei `LoRaGpsSender.apk` auf das Handy kopieren (z.B. in Downloads-Ordner)
 
-**Option B - Per Email/Cloud:**
+**Option C - Per Email/Cloud:**
 1. APK-Datei per Email verschicken oder in Cloud (Google Drive, Dropbox) hochladen
 2. Auf dem Handy Email öffnen oder Datei aus Cloud herunterladen
-
-**Option C - Per QR-Code:**
-1. APK auf Webserver hochladen
-2. QR-Code mit Link zur APK erstellen
-3. Mit Handy-Kamera QR-Code scannen
 
 ### Schritt 2: Installation erlauben
 

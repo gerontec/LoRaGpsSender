@@ -126,10 +126,20 @@ echo ""
 echo "📖 Anleitung für User: $OUTPUT_DIR/INSTALLATION.md"
 echo ""
 
+# Show QR code information
+echo "📱 QR-Code Download verfügbar:"
+echo "   🔗 https://heissa.de/web1/app-debug.pkg"
+echo ""
+echo "   QR-Code wird automatisch in INSTALLATION.md und README.md angezeigt!"
+echo "   User können direkt mit Handy-Kamera scannen und installieren."
+echo ""
+
 # Optional: Generate QR code if qrencode is available
 if command -v qrencode &> /dev/null; then
-    echo "💡 Tipp: QR-Code generieren mit:"
-    echo "   qrencode -o qr-code.png 'http://YOUR_SERVER/$OUTPUT_DIR/${APP_NAME}-v${VERSION}.apk'"
+    echo "💡 Lokalen QR-Code generieren:"
+    qrencode -o "$OUTPUT_DIR/qr-code.png" "https://heissa.de/web1/app-debug.pkg" 2>/dev/null && \
+    echo "   ✅ QR-Code erstellt: $OUTPUT_DIR/qr-code.png" || \
+    echo "   ℹ️  qrencode -o qr-code.png 'https://heissa.de/web1/app-debug.pkg'"
     echo ""
 fi
 
