@@ -5,4 +5,12 @@
     <string name="connected">Connected to ttyUSB0</string>
     <string name="disconnected">Disconnected</string>
     <string name="sending">Sending GPS data via LoRa</string>
+    <string name="config_selection">LoRa Configuration:</string>
+    <string name="send_config">Send</string>
+    <string name="config_sent">Config sent: %1$s</string>
+    <string name="config_error">Error: Not connected</string>
+
+    <string-array name="config_options">
+        <item>netid00</item>
+    </string-array>
 </resources>

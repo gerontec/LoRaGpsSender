@@ -8,6 +8,9 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.Spinner
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.hoho.android.usbserial.driver.Ch34xSerialDriver
@@ -23,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusText: TextView
     private lateinit var deviceInfo: TextView
     private lateinit var logText: TextView
+    private lateinit var configSpinner: Spinner
+    private lateinit var sendConfigButton: Button
 
     private var usbManager: UsbManager? = null
     private var serialPort: UsbSerialPort? = null
@@ -33,6 +38,14 @@ class MainActivity : AppCompatActivity() {
     // CH341 Vendor and Product IDs
     private val CH341_VENDOR_ID = 0x1a86
     private val CH341_PRODUCT_ID = 0x7523
+
+    // LoRa configuration commands
+    private val loraConfigs = mapOf(
+        "netid00" to byteArrayOf(
+            0xFF.toByte(), 0xFF.toByte(), 0x00.toByte(), 0x62.toByte(),
+            0xE0.toByte(), 0x18.toByte(), 0x00.toByte(), 0x00.toByte(), 0x00.toByte()
+        )
+    )
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -76,6 +89,19 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         deviceInfo = findViewById(R.id.deviceInfo)
         logText = findViewById(R.id.logText)
+        configSpinner = findViewById(R.id.configSpinner)
+        sendConfigButton = findViewById(R.id.sendConfigButton)
+
+        // Setup config spinner
+        val configOptions = resources.getStringArray(R.array.config_options)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, configOptions)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        configSpinner.adapter = adapter
+
+        // Setup send button
+        sendConfigButton.setOnClickListener {
+            sendSelectedConfig()
+        }
 
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
 
@@ -260,6 +286,41 @@ class MainActivity : AppCompatActivity() {
             scrollView?.post {
                 scrollView.fullScroll(android.view.View.FOCUS_DOWN)
             }
+        }
+    }
+
+    private fun sendSelectedConfig() {
+        val selectedConfig = configSpinner.selectedItem as String
+
+        if (serialPort?.isOpen != true) {
+            log("ERROR: Cannot send config - not connected to ttyUSB0")
+            return
+        }
+
+        loraConfigs[selectedConfig]?.let { configBytes ->
+            try {
+                // Send the configuration bytes
+                val bytesWritten = serialPort?.write(configBytes, 1000)
+
+                // Log the sent bytes in hex format
+                val hexString = configBytes.joinToString(" ") { byte ->
+                    String.format("%02X", byte)
+                }
+
+                if (bytesWritten != null && bytesWritten > 0) {
+                    log("TX: Config '$selectedConfig' sent successfully")
+                    log("Bytes sent: $hexString (${configBytes.size} bytes)")
+                } else {
+                    log("ERROR: Failed to send config '$selectedConfig'")
+                }
+
+            } catch (e: IOException) {
+                log("ERROR: Failed to send config: ${e.message}")
+            } catch (e: Exception) {
+                log("ERROR: Unexpected error sending config: ${e.message}")
+            }
+        } ?: run {
+            log("ERROR: Unknown configuration '$selectedConfig'")
         }
     }
 }
