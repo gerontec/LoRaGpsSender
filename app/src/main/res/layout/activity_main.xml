@@ -103,24 +103,28 @@
         app:layout_constraintTop_toTopOf="@id/messageInput"
         app:layout_constraintBottom_toBottomOf="@id/messageInput" />
 
-    <ScrollView
+    <TextView
+        android:id="@+id/chatLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/chat_messages"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/messageInput" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/chatRecyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
+        android:background="#F5F5F5"
         app:layout_constraintBottom_toTopOf="@id/emergencyButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/messageInput">
-
-        <TextView
-            android:id="@+id/logText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="Log output:\n"
-            android:textSize="12sp" />
-    </ScrollView>
+        app:layout_constraintTop_toBottomOf="@id/chatLabel" />
 
     <Button
         android:id="@+id/emergencyButton"

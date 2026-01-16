@@ -1,6 +1,7 @@
 package com.gerontec.loragpssender
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,7 +13,9 @@ import android.hardware.usb.UsbManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
+import android.telephony.TelephonyManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -22,6 +25,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.hoho.android.usbserial.driver.Ch34xSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -34,21 +39,24 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var deviceInfo: TextView
-    private lateinit var logText: TextView
     private lateinit var configSpinner: Spinner
     private lateinit var sendConfigButton: Button
     private lateinit var messageInput: EditText
     private lateinit var sendMessageButton: Button
     private lateinit var emergencyButton: Button
+    private lateinit var chatRecyclerView: RecyclerView
+    private lateinit var chatAdapter: ChatAdapter
 
     private var usbManager: UsbManager? = null
     private var serialPort: UsbSerialPort? = null
     private var usbDevice: UsbDevice? = null
     private var locationManager: LocationManager? = null
     private var lastKnownLocation: Location? = null
+    private var deviceId: String = "UNKNOWN"
 
     private val ACTION_USB_PERMISSION = "com.gerontec.loragpssender.USB_PERMISSION"
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
+    private val PHONE_STATE_PERMISSION_REQUEST_CODE = 1002
 
     // CH341 Vendor and Product IDs
     private val CH341_VENDOR_ID = 0x1a86
@@ -107,12 +115,17 @@ class MainActivity : AppCompatActivity() {
 
         statusText = findViewById(R.id.statusText)
         deviceInfo = findViewById(R.id.deviceInfo)
-        logText = findViewById(R.id.logText)
         configSpinner = findViewById(R.id.configSpinner)
         sendConfigButton = findViewById(R.id.sendConfigButton)
         messageInput = findViewById(R.id.messageInput)
         sendMessageButton = findViewById(R.id.sendMessageButton)
         emergencyButton = findViewById(R.id.emergencyButton)
+        chatRecyclerView = findViewById(R.id.chatRecyclerView)
+
+        // Setup chat RecyclerView
+        chatAdapter = ChatAdapter(mutableListOf())
+        chatRecyclerView.layoutManager = LinearLayoutManager(this)
+        chatRecyclerView.adapter = chatAdapter
 
         // Setup config spinner
         val configOptions = resources.getStringArray(R.array.config_options)
@@ -138,8 +151,14 @@ class MainActivity : AppCompatActivity() {
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
+        // Get device ID (IMEI or phone number)
+        getDeviceId()
+
         // Request location permissions
         requestLocationPermissions()
+
+        // Request phone state permission
+        requestPhoneStatePermission()
 
         // Register USB receivers
         val filter = IntentFilter().apply {
@@ -268,13 +287,34 @@ class MainActivity : AppCompatActivity() {
         // Start a thread to read data from the serial port
         Thread {
             val buffer = ByteArray(1024)
+            val messageBuffer = StringBuilder()
+
             while (serialPort?.isOpen == true) {
                 try {
                     val numBytesRead = serialPort?.read(buffer, 1000)
                     if (numBytesRead != null && numBytesRead > 0) {
-                        val data = String(buffer, 0, numBytesRead)
-                        runOnUiThread {
-                            log("RX: $data")
+                        val data = String(buffer, 0, numBytesRead, Charsets.US_ASCII)
+                        messageBuffer.append(data)
+
+                        // Process complete messages (terminated by newline)
+                        var newlineIndex = messageBuffer.indexOf('\n')
+                        while (newlineIndex != -1) {
+                            val message = messageBuffer.substring(0, newlineIndex).trim()
+                            messageBuffer.delete(0, newlineIndex + 1)
+
+                            if (message.isNotEmpty()) {
+                                runOnUiThread {
+                                    parseReceivedMessage(message)
+                                }
+                            }
+
+                            newlineIndex = messageBuffer.indexOf('\n')
+                        }
+
+                        // If buffer gets too large without newline, clear it to prevent memory issues
+                        if (messageBuffer.length > 2048) {
+                            log("RX: Buffer overflow, clearing: ${messageBuffer.take(100)}...")
+                            messageBuffer.clear()
                         }
                     }
                 } catch (e: IOException) {
@@ -285,6 +325,40 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+
+    private fun parseReceivedMessage(rawMessage: String) {
+        try {
+            // Expected format: "DEVICEID: message"
+            if (rawMessage.contains(":")) {
+                val parts = rawMessage.split(":", limit = 2)
+                if (parts.size == 2) {
+                    val senderId = parts[0].trim()
+                    val message = parts[1].trim()
+
+                    // Don't display our own messages again (they're already in sent messages)
+                    if (senderId != deviceId) {
+                        val chatMessage = ChatMessage(
+                            senderId = senderId,
+                            message = message,
+                            timestamp = System.currentTimeMillis(),
+                            isSent = false
+                        )
+                        chatAdapter.addMessage(chatMessage)
+                        chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
+                        log("RX: Message from $senderId")
+                    }
+                } else {
+                    // Message without proper format, show as raw
+                    log("RX: $rawMessage")
+                }
+            } else {
+                // Message without colon, show as system message
+                log("RX: $rawMessage")
+            }
+        } catch (e: Exception) {
+            log("Error parsing message: ${e.message}")
+        }
     }
 
     private fun disconnect() {
@@ -371,17 +445,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         try {
-            // Send message as ASCII bytes
-            val messageBytes = message.toByteArray(Charsets.US_ASCII)
+            // Add device ID prefix to message
+            val fullMessage = "$deviceId: $message"
+
+            // Send message as ASCII bytes with newline terminator
+            val messageBytes = "$fullMessage\n".toByteArray(Charsets.US_ASCII)
             serialPort?.write(messageBytes, 1000)
 
-            val hexString = messageBytes.joinToString(" ") { byte ->
-                String.format("%02X", byte)
+            // Add sent message to chat
+            val chatMessage = ChatMessage(
+                senderId = deviceId,
+                message = message,
+                timestamp = System.currentTimeMillis(),
+                isSent = true
+            )
+            runOnUiThread {
+                chatAdapter.addMessage(chatMessage)
+                chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
             }
 
-            log("TX: Message sent successfully")
-            log("Message: $message")
-            log("Bytes: $hexString (${messageBytes.size} bytes)")
+            log("TX: Message sent - $fullMessage")
 
             // Clear input field
             messageInput.setText("")
@@ -424,24 +507,33 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            // Format GPS data as string: "EMERGENCY LAT:xx.xxxxx LON:yy.yyyyy"
+            // Format GPS data with device ID prefix
             val gpsMessage = String.format(
                 "EMERGENCY LAT:%.6f LON:%.6f",
                 location.latitude,
                 location.longitude
             )
 
-            // Send GPS message as ASCII bytes
-            val gpsBytes = gpsMessage.toByteArray(Charsets.US_ASCII)
+            // Add device ID prefix
+            val fullMessage = "$deviceId: $gpsMessage"
+
+            // Send GPS message as ASCII bytes with newline terminator
+            val gpsBytes = "$fullMessage\n".toByteArray(Charsets.US_ASCII)
             serialPort?.write(gpsBytes, 1000)
 
-            val hexString = gpsBytes.joinToString(" ") { byte ->
-                String.format("%02X", byte)
+            // Add emergency message to chat
+            val chatMessage = ChatMessage(
+                senderId = deviceId,
+                message = gpsMessage,
+                timestamp = System.currentTimeMillis(),
+                isSent = true
+            )
+            runOnUiThread {
+                chatAdapter.addMessage(chatMessage)
+                chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
             }
 
-            log("TX: EMERGENCY GPS sent successfully")
-            log("GPS: $gpsMessage")
-            log("Bytes: $hexString (${gpsBytes.size} bytes)")
+            log("TX: EMERGENCY GPS sent - $fullMessage")
 
             Toast.makeText(this, "NOTFALL GPS gesendet!", Toast.LENGTH_LONG).show()
 
@@ -551,6 +643,91 @@ class MainActivity : AppCompatActivity() {
                     Toast.makeText(this, "GPS-Berechtigung benötigt für Notfall-Funktion", Toast.LENGTH_LONG).show()
                 }
             }
+            PHONE_STATE_PERMISSION_REQUEST_CODE -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    log("Phone: Permission granted")
+                    getDeviceId()
+                } else {
+                    log("Phone: Permission denied - using default device ID")
+                    deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+                }
+            }
+        }
+    }
+
+    private fun requestPhoneStatePermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                PHONE_STATE_PERMISSION_REQUEST_CODE
+            )
+        } else {
+            getDeviceId()
+        }
+    }
+
+    @SuppressLint("HardwareIds", "MissingPermission")
+    private fun getDeviceId() {
+        try {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                == PackageManager.PERMISSION_GRANTED) {
+
+                val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+
+                // Try to get phone number first
+                deviceId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    telephonyManager.subscriberId ?: "UNKNOWN"
+                } else {
+                    @Suppress("DEPRECATION")
+                    telephonyManager.line1Number ?: telephonyManager.subscriberId ?: "UNKNOWN"
+                }
+
+                // If phone number is empty or UNKNOWN, try IMEI (for older devices)
+                if (deviceId.isBlank() || deviceId == "UNKNOWN") {
+                    deviceId = try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            telephonyManager.imei ?: "DEVICE_${Build.SERIAL}"
+                        } else {
+                            @Suppress("DEPRECATION")
+                            telephonyManager.deviceId ?: "DEVICE_${Build.SERIAL}"
+                        }
+                    } catch (e: Exception) {
+                        "DEVICE_${System.currentTimeMillis() % 10000}"
+                    }
+                }
+
+                // Clean up phone number (remove special characters)
+                deviceId = deviceId.replace(Regex("[^0-9A-Za-z]"), "")
+
+                // If still empty, use fallback
+                if (deviceId.isBlank()) {
+                    deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+                }
+
+                log("Device ID set to: $deviceId")
+            } else {
+                deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+                log("Using generated device ID: $deviceId")
+            }
+        } catch (e: Exception) {
+            deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+            log("Error getting device ID: ${e.message}, using: $deviceId")
+        }
+    }
+
+    private fun log(message: String) {
+        // Add system messages to chat as info
+        val chatMessage = ChatMessage(
+            senderId = "SYSTEM",
+            message = message,
+            timestamp = System.currentTimeMillis(),
+            isSent = false
+        )
+        runOnUiThread {
+            chatAdapter.addMessage(chatMessage)
+            chatRecyclerView.scrollToPosition(chatAdapter.itemCount - 1)
         }
     }
 }

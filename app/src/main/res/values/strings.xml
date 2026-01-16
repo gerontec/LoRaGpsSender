@@ -13,6 +13,7 @@
     <string name="message_hint">Nachricht eingeben...</string>
     <string name="send_message">Senden</string>
     <string name="emergency_gps">NOTFALL GPS</string>
+    <string name="chat_messages">Chat / Empfangene Nachrichten:</string>
 
     <string-array name="config_options">
         <item>netid00</item>
