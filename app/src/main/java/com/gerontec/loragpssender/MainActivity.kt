@@ -152,7 +152,7 @@ class MainActivity : AppCompatActivity() {
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         // Get device ID (IMEI or phone number)
-        getDeviceId()
+        loadDeviceId()
 
         // Request location permissions
         requestLocationPermissions()
@@ -382,20 +382,6 @@ class MainActivity : AppCompatActivity() {
                 else
                     getColor(android.R.color.holo_red_dark)
             )
-        }
-    }
-
-    private fun log(message: String) {
-        val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-        val logMessage = "[$timestamp] $message\n"
-        runOnUiThread {
-            logText.append(logMessage)
-
-            // Auto-scroll to bottom
-            val scrollView = logText.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.fullScroll(android.view.View.FOCUS_DOWN)
-            }
         }
     }
 
@@ -646,7 +632,7 @@ class MainActivity : AppCompatActivity() {
             PHONE_STATE_PERMISSION_REQUEST_CODE -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     log("Phone: Permission granted")
-                    getDeviceId()
+                    loadDeviceId()
                 } else {
                     log("Phone: Permission denied - using default device ID")
                     deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
@@ -664,12 +650,12 @@ class MainActivity : AppCompatActivity() {
                 PHONE_STATE_PERMISSION_REQUEST_CODE
             )
         } else {
-            getDeviceId()
+            loadDeviceId()
         }
     }
 
     @SuppressLint("HardwareIds", "MissingPermission")
-    private fun getDeviceId() {
+    private fun loadDeviceId() {
         try {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
                 == PackageManager.PERMISSION_GRANTED) {
