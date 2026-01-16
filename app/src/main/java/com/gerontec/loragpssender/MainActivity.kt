@@ -37,8 +37,6 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var statusText: TextView
-    private lateinit var deviceInfo: TextView
     private lateinit var configSpinner: Spinner
     private lateinit var sendConfigButton: Button
     private lateinit var messageInput: EditText
@@ -87,7 +85,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         } else {
                             log("USB permission denied")
-                            updateStatus("Permission denied", false)
+                            log("USB permission denied")
                         }
                     }
                 }
@@ -113,8 +111,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusText = findViewById(R.id.statusText)
-        deviceInfo = findViewById(R.id.deviceInfo)
         configSpinner = findViewById(R.id.configSpinner)
         sendConfigButton = findViewById(R.id.sendConfigButton)
         messageInput = findViewById(R.id.messageInput)
@@ -204,7 +200,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             ch341Device?.let { device ->
-                deviceInfo.text = "CH341 found on ${device.deviceName} (ttyUSB0)"
+                log("CH341 found on ${device.deviceName} (ttyUSB0)")
 
                 if (manager.hasPermission(device)) {
                     log("Already have permission, connecting...")
@@ -222,8 +218,7 @@ class MainActivity : AppCompatActivity() {
             } ?: run {
                 log("ERROR: CH341 device not found!")
                 log("Expected VID: 0x1A86, PID: 0x7523")
-                deviceInfo.text = "CH341 not found - check USB connection"
-                updateStatus("Device not found", false)
+                // Device not found already logged above
             }
         }
     }
@@ -238,7 +233,7 @@ class MainActivity : AppCompatActivity() {
 
             if (ports.isEmpty()) {
                 log("ERROR: No serial ports found on device")
-                updateStatus("No serial ports", false)
+                // Error already logged above
                 return
             }
 
@@ -248,7 +243,7 @@ class MainActivity : AppCompatActivity() {
             val connection = usbManager?.openDevice(device)
             if (connection == null) {
                 log("ERROR: Failed to open USB device")
-                updateStatus("Failed to open device", false)
+                // Error already logged above
                 return
             }
 
@@ -266,7 +261,7 @@ class MainActivity : AppCompatActivity() {
 
                 log("Successfully connected to ttyUSB0")
                 log("Port settings: 9600 baud, 8N1")
-                updateStatus("Connected to ttyUSB0", true)
+                // Connection success already logged above
 
                 // Start reading data from the serial port
                 startReading()
@@ -274,11 +269,11 @@ class MainActivity : AppCompatActivity() {
 
         } catch (e: IOException) {
             log("ERROR: Failed to connect: ${e.message}")
-            updateStatus("Connection failed", false)
+            // Error already logged above
             disconnect()
         } catch (e: Exception) {
             log("ERROR: Unexpected error: ${e.message}")
-            updateStatus("Error: ${e.message}", false)
+            // Error already logged above
             disconnect()
         }
     }
@@ -367,21 +362,9 @@ class MainActivity : AppCompatActivity() {
             serialPort = null
             usbDevice = null
             log("Disconnected from ttyUSB0")
-            updateStatus("Disconnected", false)
+            // Disconnect already logged above
         } catch (e: IOException) {
             log("Error closing port: ${e.message}")
-        }
-    }
-
-    private fun updateStatus(message: String, isConnected: Boolean) {
-        runOnUiThread {
-            statusText.text = message
-            statusText.setTextColor(
-                if (isConnected)
-                    getColor(android.R.color.holo_green_dark)
-                else
-                    getColor(android.R.color.holo_red_dark)
-            )
         }
     }
 
