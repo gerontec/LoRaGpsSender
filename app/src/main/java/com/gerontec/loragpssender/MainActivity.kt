@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val ACTION_USB_PERMISSION = "com.gerontec.loragpssender.USB_PERMISSION"
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
     private val PHONE_STATE_PERMISSION_REQUEST_CODE = 1002
+    private val PHONE_NUMBERS_PERMISSION_REQUEST_CODE = 1003
 
     // CH341 Vendor and Product IDs
     private val CH341_VENDOR_ID = 0x1a86
@@ -625,11 +626,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPhoneStatePermission() {
+        val permissionsNeeded = mutableListOf<String>()
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
             != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS)
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_PHONE_NUMBERS)
+            }
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                permissionsNeeded.toTypedArray(),
                 PHONE_STATE_PERMISSION_REQUEST_CODE
             )
         } else {
@@ -640,49 +654,75 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("HardwareIds", "MissingPermission")
     private fun loadDeviceId() {
         try {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-                == PackageManager.PERMISSION_GRANTED) {
+            val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            var phoneNumber: String? = null
+            var imei: String? = null
 
-                val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            log("DEBUG: Attempting to load device ID...")
+            log("DEBUG: Android version: ${Build.VERSION.SDK_INT}")
 
-                // Try to get phone number first
-                deviceId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    telephonyManager.subscriberId ?: "UNKNOWN"
-                } else {
-                    @Suppress("DEPRECATION")
-                    telephonyManager.line1Number ?: telephonyManager.subscriberId ?: "UNKNOWN"
+            // Try to get phone number - this often returns null/empty
+            try {
+                phoneNumber = telephonyManager.line1Number
+                log("DEBUG: line1Number = ${phoneNumber ?: "null"}")
+            } catch (e: Exception) {
+                log("DEBUG: Error reading line1Number: ${e.message}")
+            }
+
+            // Try to get IMEI as fallback
+            try {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                    == PackageManager.PERMISSION_GRANTED) {
+
+                    imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        telephonyManager.imei
+                    } else {
+                        @Suppress("DEPRECATION")
+                        telephonyManager.deviceId
+                    }
+                    log("DEBUG: IMEI/DeviceID = ${imei ?: "null"}")
                 }
+            } catch (e: Exception) {
+                log("DEBUG: Error reading IMEI: ${e.message}")
+            }
 
-                // If phone number is empty or UNKNOWN, try IMEI (for older devices)
-                if (deviceId.isBlank() || deviceId == "UNKNOWN") {
-                    deviceId = try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            telephonyManager.imei ?: "DEVICE_${Build.SERIAL}"
-                        } else {
-                            @Suppress("DEPRECATION")
-                            telephonyManager.deviceId ?: "DEVICE_${Build.SERIAL}"
-                        }
-                    } catch (e: Exception) {
-                        "DEVICE_${System.currentTimeMillis() % 10000}"
+            // Choose best available ID
+            deviceId = when {
+                // Prefer phone number if available and not empty
+                !phoneNumber.isNullOrBlank() -> {
+                    phoneNumber.replace(Regex("[^0-9]"), "").also {
+                        log("DEBUG: Using phone number: $it")
                     }
                 }
-
-                // Clean up phone number (remove special characters)
-                deviceId = deviceId.replace(Regex("[^0-9A-Za-z]"), "")
-
-                // If still empty, use fallback
-                if (deviceId.isBlank()) {
-                    deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+                // Fall back to IMEI
+                !imei.isNullOrBlank() -> {
+                    imei.also {
+                        log("DEBUG: Using IMEI: $it")
+                    }
                 }
-
-                log("Device ID set to: $deviceId")
-            } else {
-                deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
-                log("Using generated device ID: $deviceId")
+                // Last resort: generate an ID
+                else -> {
+                    "DEVICE_${System.currentTimeMillis() % 100000}".also {
+                        log("DEBUG: Using generated ID: $it")
+                    }
+                }
             }
+
+            // Clean up ID (remove special characters, keep only alphanumeric)
+            deviceId = deviceId.replace(Regex("[^0-9A-Za-z]"), "")
+
+            // Final check - if still empty, use fallback
+            if (deviceId.isBlank()) {
+                deviceId = "DEVICE_${System.currentTimeMillis() % 100000}"
+                log("DEBUG: ID was blank, using fallback: $deviceId")
+            }
+
+            log("Device ID successfully set to: $deviceId")
+
         } catch (e: Exception) {
-            deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
-            log("Error getting device ID: ${e.message}, using: $deviceId")
+            deviceId = "DEVICE_${System.currentTimeMillis() % 100000}"
+            log("ERROR getting device ID: ${e.message}")
+            log("Using generated device ID: $deviceId")
         }
     }
 
