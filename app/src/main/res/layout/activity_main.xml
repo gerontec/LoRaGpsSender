@@ -7,58 +7,25 @@
     android:padding="16dp">
 
     <TextView
-        android:id="@+id/statusLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/status"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/disconnected"
-        android:textSize="16sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusLabel" />
-
-    <TextView
-        android:id="@+id/deviceInfo"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Waiting for CH341 on ttyUSB0..."
-        android:textSize="14sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/statusText" />
-
-    <TextView
         android:id="@+id/configLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="@string/config_selection"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:text="@string/config_short"
+        android:textSize="14sp"
+        android:layout_marginEnd="8dp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/deviceInfo" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="@id/configSpinner" />
 
     <Spinner
         android:id="@+id/configSpinner"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
         android:minHeight="48dp"
         app:layout_constraintEnd_toStartOf="@id/sendConfigButton"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/configLabel" />
+        app:layout_constraintStart_toEndOf="@id/configLabel"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <Button
         android:id="@+id/sendConfigButton"
@@ -73,12 +40,13 @@
         android:id="@+id/messageLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="@string/message_label"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:text="@string/message_short"
+        android:textSize="14sp"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/configSpinner" />
+        app:layout_constraintTop_toBottomOf="@id/configSpinner"
+        app:layout_constraintBottom_toBottomOf="@id/messageInput" />
 
     <EditText
         android:id="@+id/messageInput"
@@ -91,8 +59,8 @@
         android:maxLength="100"
         android:minHeight="48dp"
         app:layout_constraintEnd_toStartOf="@id/sendMessageButton"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/messageLabel" />
+        app:layout_constraintStart_toEndOf="@id/messageLabel"
+        app:layout_constraintTop_toBottomOf="@id/configSpinner" />
 
     <Button
         android:id="@+id/sendMessageButton"

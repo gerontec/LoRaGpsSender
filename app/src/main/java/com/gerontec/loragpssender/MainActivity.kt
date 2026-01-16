@@ -37,8 +37,6 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var statusText: TextView
-    private lateinit var deviceInfo: TextView
     private lateinit var configSpinner: Spinner
     private lateinit var sendConfigButton: Button
     private lateinit var messageInput: EditText
@@ -57,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val ACTION_USB_PERMISSION = "com.gerontec.loragpssender.USB_PERMISSION"
     private val LOCATION_PERMISSION_REQUEST_CODE = 1001
     private val PHONE_STATE_PERMISSION_REQUEST_CODE = 1002
+    private val PHONE_NUMBERS_PERMISSION_REQUEST_CODE = 1003
 
     // CH341 Vendor and Product IDs
     private val CH341_VENDOR_ID = 0x1a86
@@ -87,7 +86,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         } else {
                             log("USB permission denied")
-                            updateStatus("Permission denied", false)
+                            log("USB permission denied")
                         }
                     }
                 }
@@ -113,8 +112,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        statusText = findViewById(R.id.statusText)
-        deviceInfo = findViewById(R.id.deviceInfo)
         configSpinner = findViewById(R.id.configSpinner)
         sendConfigButton = findViewById(R.id.sendConfigButton)
         messageInput = findViewById(R.id.messageInput)
@@ -152,7 +149,7 @@ class MainActivity : AppCompatActivity() {
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
         // Get device ID (IMEI or phone number)
-        getDeviceId()
+        loadDeviceId()
 
         // Request location permissions
         requestLocationPermissions()
@@ -204,7 +201,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             ch341Device?.let { device ->
-                deviceInfo.text = "CH341 found on ${device.deviceName} (ttyUSB0)"
+                log("CH341 found on ${device.deviceName} (ttyUSB0)")
 
                 if (manager.hasPermission(device)) {
                     log("Already have permission, connecting...")
@@ -222,8 +219,7 @@ class MainActivity : AppCompatActivity() {
             } ?: run {
                 log("ERROR: CH341 device not found!")
                 log("Expected VID: 0x1A86, PID: 0x7523")
-                deviceInfo.text = "CH341 not found - check USB connection"
-                updateStatus("Device not found", false)
+                // Device not found already logged above
             }
         }
     }
@@ -238,7 +234,7 @@ class MainActivity : AppCompatActivity() {
 
             if (ports.isEmpty()) {
                 log("ERROR: No serial ports found on device")
-                updateStatus("No serial ports", false)
+                // Error already logged above
                 return
             }
 
@@ -248,7 +244,7 @@ class MainActivity : AppCompatActivity() {
             val connection = usbManager?.openDevice(device)
             if (connection == null) {
                 log("ERROR: Failed to open USB device")
-                updateStatus("Failed to open device", false)
+                // Error already logged above
                 return
             }
 
@@ -266,7 +262,7 @@ class MainActivity : AppCompatActivity() {
 
                 log("Successfully connected to ttyUSB0")
                 log("Port settings: 9600 baud, 8N1")
-                updateStatus("Connected to ttyUSB0", true)
+                // Connection success already logged above
 
                 // Start reading data from the serial port
                 startReading()
@@ -274,11 +270,11 @@ class MainActivity : AppCompatActivity() {
 
         } catch (e: IOException) {
             log("ERROR: Failed to connect: ${e.message}")
-            updateStatus("Connection failed", false)
+            // Error already logged above
             disconnect()
         } catch (e: Exception) {
             log("ERROR: Unexpected error: ${e.message}")
-            updateStatus("Error: ${e.message}", false)
+            // Error already logged above
             disconnect()
         }
     }
@@ -367,35 +363,9 @@ class MainActivity : AppCompatActivity() {
             serialPort = null
             usbDevice = null
             log("Disconnected from ttyUSB0")
-            updateStatus("Disconnected", false)
+            // Disconnect already logged above
         } catch (e: IOException) {
             log("Error closing port: ${e.message}")
-        }
-    }
-
-    private fun updateStatus(message: String, isConnected: Boolean) {
-        runOnUiThread {
-            statusText.text = message
-            statusText.setTextColor(
-                if (isConnected)
-                    getColor(android.R.color.holo_green_dark)
-                else
-                    getColor(android.R.color.holo_red_dark)
-            )
-        }
-    }
-
-    private fun log(message: String) {
-        val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-        val logMessage = "[$timestamp] $message\n"
-        runOnUiThread {
-            logText.append(logMessage)
-
-            // Auto-scroll to bottom
-            val scrollView = logText.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.fullScroll(android.view.View.FOCUS_DOWN)
-            }
         }
     }
 
@@ -646,7 +616,7 @@ class MainActivity : AppCompatActivity() {
             PHONE_STATE_PERMISSION_REQUEST_CODE -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     log("Phone: Permission granted")
-                    getDeviceId()
+                    loadDeviceId()
                 } else {
                     log("Phone: Permission denied - using default device ID")
                     deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
@@ -656,64 +626,103 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestPhoneStatePermission() {
+        val permissionsNeeded = mutableListOf<String>()
+
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
             != PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(Manifest.permission.READ_PHONE_STATE)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_NUMBERS)
+                != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.READ_PHONE_NUMBERS)
+            }
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.READ_PHONE_STATE),
+                permissionsNeeded.toTypedArray(),
                 PHONE_STATE_PERMISSION_REQUEST_CODE
             )
         } else {
-            getDeviceId()
+            loadDeviceId()
         }
     }
 
     @SuppressLint("HardwareIds", "MissingPermission")
-    private fun getDeviceId() {
+    private fun loadDeviceId() {
         try {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-                == PackageManager.PERMISSION_GRANTED) {
+            val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            var phoneNumber: String? = null
+            var imei: String? = null
 
-                val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            log("DEBUG: Attempting to load device ID...")
+            log("DEBUG: Android version: ${Build.VERSION.SDK_INT}")
 
-                // Try to get phone number first
-                deviceId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    telephonyManager.subscriberId ?: "UNKNOWN"
-                } else {
-                    @Suppress("DEPRECATION")
-                    telephonyManager.line1Number ?: telephonyManager.subscriberId ?: "UNKNOWN"
+            // Try to get phone number - this often returns null/empty
+            try {
+                phoneNumber = telephonyManager.line1Number
+                log("DEBUG: line1Number = ${phoneNumber ?: "null"}")
+            } catch (e: Exception) {
+                log("DEBUG: Error reading line1Number: ${e.message}")
+            }
+
+            // Try to get IMEI as fallback
+            try {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+                    == PackageManager.PERMISSION_GRANTED) {
+
+                    imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        telephonyManager.imei
+                    } else {
+                        @Suppress("DEPRECATION")
+                        telephonyManager.deviceId
+                    }
+                    log("DEBUG: IMEI/DeviceID = ${imei ?: "null"}")
                 }
+            } catch (e: Exception) {
+                log("DEBUG: Error reading IMEI: ${e.message}")
+            }
 
-                // If phone number is empty or UNKNOWN, try IMEI (for older devices)
-                if (deviceId.isBlank() || deviceId == "UNKNOWN") {
-                    deviceId = try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            telephonyManager.imei ?: "DEVICE_${Build.SERIAL}"
-                        } else {
-                            @Suppress("DEPRECATION")
-                            telephonyManager.deviceId ?: "DEVICE_${Build.SERIAL}"
-                        }
-                    } catch (e: Exception) {
-                        "DEVICE_${System.currentTimeMillis() % 10000}"
+            // Choose best available ID
+            deviceId = when {
+                // Prefer phone number if available and not empty
+                !phoneNumber.isNullOrBlank() -> {
+                    phoneNumber.replace(Regex("[^0-9]"), "").also {
+                        log("DEBUG: Using phone number: $it")
                     }
                 }
-
-                // Clean up phone number (remove special characters)
-                deviceId = deviceId.replace(Regex("[^0-9A-Za-z]"), "")
-
-                // If still empty, use fallback
-                if (deviceId.isBlank()) {
-                    deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
+                // Fall back to IMEI
+                !imei.isNullOrBlank() -> {
+                    imei.also {
+                        log("DEBUG: Using IMEI: $it")
+                    }
                 }
-
-                log("Device ID set to: $deviceId")
-            } else {
-                deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
-                log("Using generated device ID: $deviceId")
+                // Last resort: generate an ID
+                else -> {
+                    "DEVICE_${System.currentTimeMillis() % 100000}".also {
+                        log("DEBUG: Using generated ID: $it")
+                    }
+                }
             }
+
+            // Clean up ID (remove special characters, keep only alphanumeric)
+            deviceId = deviceId.replace(Regex("[^0-9A-Za-z]"), "")
+
+            // Final check - if still empty, use fallback
+            if (deviceId.isBlank()) {
+                deviceId = "DEVICE_${System.currentTimeMillis() % 100000}"
+                log("DEBUG: ID was blank, using fallback: $deviceId")
+            }
+
+            log("Device ID successfully set to: $deviceId")
+
         } catch (e: Exception) {
-            deviceId = "DEVICE_${System.currentTimeMillis() % 10000}"
-            log("Error getting device ID: ${e.message}, using: $deviceId")
+            deviceId = "DEVICE_${System.currentTimeMillis() % 100000}"
+            log("ERROR getting device ID: ${e.message}")
+            log("Using generated device ID: $deviceId")
         }
     }
 
