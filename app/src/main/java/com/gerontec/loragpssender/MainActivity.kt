@@ -62,14 +62,28 @@ class MainActivity : AppCompatActivity() {
     private val CH341_PRODUCT_ID = 0x7523
 
     // LoRa configuration commands
+    //
+    // Aufbau: C0 | ADDH ADDL | NETID | REG0 | REG1 | REG2 | REG3 | CRYPT_H CRYPT_L
+    //
+    //   ADDH/ADDL FF FF  Broadcast. Als Empfaenger ungefiltert, als Sender traegt
+    //                    das Paket die Broadcast-Adresse und wird von keiner
+    //                    Gegenstelle gefiltert -- auch bei abweichender NETID
+    //                    nicht, die hat laut Handbuch niedrigere Prioritaet.
+    //   REG0 0x62        9600 8N1, Luftrate 2. Gemessen ist das SF11/BW500,
+    //                    nicht SF11/BW125 -- die Ebyte-Luftratentabelle ist
+    //                    nominal, die Leiter durchgehend BW500.
+    //   REG2 0x12        Kanal 18 -> 850.125 + 18 = 868.125 MHz.
+    //                    Stand bis 17.08.2026 auf 0x18 = Kanal 24 = 874.125 MHz
+    //                    und lag damit ausserhalb des Netzes.
+    //   REG3 0x80        RSSI-Byte an, transparent, kein Fixpunkt, kein Repeater.
     private val loraConfigs = mapOf(
         "netid00" to byteArrayOf(
             0xC0.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0x00.toByte(), 0x62.toByte(),
-            0xE0.toByte(), 0x18.toByte(), 0x80.toByte(), 0x00.toByte(), 0x00.toByte()
+            0xE0.toByte(), 0x12.toByte(), 0x80.toByte(), 0x00.toByte(), 0x00.toByte()
         ),
         "netid10" to byteArrayOf(
             0xC0.toByte(), 0xFF.toByte(), 0xFF.toByte(), 0x0A.toByte(), 0x62.toByte(),
-            0xE0.toByte(), 0x18.toByte(), 0x80.toByte(), 0x00.toByte(), 0x00.toByte()
+            0xE0.toByte(), 0x12.toByte(), 0x80.toByte(), 0x00.toByte(), 0x00.toByte()
         )
     )
 
