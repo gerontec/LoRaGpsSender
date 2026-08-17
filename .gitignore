@@ -1,4 +1,19 @@
-# Project exclude paths
-/.gradle/
+# Build-Ausgaben. Wurden bis 17.08.2026 mitversioniert: 573 Dateien, die sich
+# bei jedem Build aendern und deshalb bei jedem Branchwechsel kollidierten --
+# ein Merge war ohne vorheriges Verwerfen nicht moeglich.
 /build/
+app/build/
+/.gradle/
+*.iml
+
+# Erzeugtes Verteilungspaket, baut prepare-distribution.sh
 /distribution/
+
+# Maschinenspezifisch: enthaelt sdk.dir mit absolutem Pfad, der auf keinem
+# anderen Rechner stimmt. Android Studio legt die Datei selbst wieder an.
+local.properties
+
+# IDE-Zustand
+/.idea/
+
+# Gebaute Staende liegen versioniert in apk/ und bleiben drin.
